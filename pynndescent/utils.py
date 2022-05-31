@@ -412,13 +412,6 @@ def mark_visited(table, candidate):
     cache=True,
 )
 def simple_heap_push(priorities, indices, p, n):
-    with numba.objmode:
-        print("simple_heap_push(): priorities = {}".format(priorities))
-        idx = np.where(priorities < np.inf)
-        print("simple_heap_push(): idx = " + str(idx))
-        print("simple_heap_push(): {} nonzero priorities: {}".format(len(idx[0]), priorities[idx]))
-        print("simple_heap_push(): indices = {}".format(indices))
-        print("simple_heap_push(): nonnegative indices = {}".format(indices[idx]))
     if p >= priorities[0]:
         return 0
 
@@ -428,8 +421,6 @@ def simple_heap_push(priorities, indices, p, n):
     priorities[0] = p
     indices[0] = n
 
-    print("simple_heap_push(): Starting the main loop")
-
     # descend the heap, swapping values until the max heap criterion is met
     i = 0
     while True:
@@ -438,46 +429,29 @@ def simple_heap_push(priorities, indices, p, n):
         if ic1 < i or ic2 < ic1:
             raise OverflowError
 
-        with numba.objmode:
-            print("simple_heap_push(): ic1 = " + str(ic1))
-            print("simple_heap_push(): ic2 = " + str(ic2))
-
         if ic1 >= size:
-            print("simple_heap_push(): ic1 >= size")
             break
         elif ic2 >= size:
-            print("simple_heap_push(): ic2 >= size")
             if priorities[ic1] > p:
                 i_swap = ic1
             else:
                 break
         elif priorities[ic1] >= priorities[ic2]:
-            with numba.objmode:
-                print("simple_heap_push(): priorities[ic1] >= priorities[ic2]")
-                print("simple_heap_push(): priorities[ic1] = " + str(priorities[ic1]))
-                print("simple_heap_push(): priorities[ic2] = " + str(priorities[ic2]))
             if p < priorities[ic1]:
                 i_swap = ic1
             else:
                 break
         else:
-            with numba.objmode:
-                print("simple_heap_push(): else")
-                print("simple_heap_push(): priorities[ic1] = " + str(priorities[ic1]))
-                print("simple_heap_push(): priorities[ic2] = " + str(priorities[ic2]))
             if p < priorities[ic2]:
                 i_swap = ic2
             else:
                 break
-
-        print("simple_heap_push(): i =", str(i), ", i_swap =", str(i_swap))
 
         priorities[i] = priorities[i_swap]
         indices[i] = indices[i_swap]
 
         i = i_swap
 
-    print("simple_heap_push(): final i =", str(i))
     priorities[i] = p
     indices[i] = n
 

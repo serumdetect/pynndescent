@@ -1183,7 +1183,6 @@ class NNDescent:
         numba.set_num_threads(self._original_num_threads)
 
     def _init_search_function(self):
-        print(ts(), "In _init_search_function()")
 
         if self.verbose:
             print(ts(), "Building and compiling search function")
@@ -1260,22 +1259,12 @@ class NNDescent:
             parallel=self.parallel_batch_queries,
         )
         def search_closure(query_points, k, epsilon, visited, rng_state):
-            print("In search_closure()")
 
             result = make_heap(query_points.shape[0], k)
             distance_scale = 1.0 + epsilon
             internal_rng_state = np.copy(rng_state)
-            print("result shape is " + str(result[0].shape[0]) + " " + str(result[0].shape[1]))
-
-            def num_visited(visited):
-                sum = 0
-                for i in range(8):
-                    sum += np.sum(((visited >> i) & 1))
-                sum = int(sum)
-                return sum
 
             for i in numba.prange(query_points.shape[0]):
-                print("i =", str(i))
                 # Avoid races on visited if parallel
                 if parallel_search:
                     visited_nodes = np.zeros_like(visited)
@@ -1292,17 +1281,10 @@ class NNDescent:
                 else:
                     current_query = query_points[i]
 
-                print("  mark_visited has " + str(num_visited(visited_nodes)) + "/" + str(8 * len(visited_nodes)) + " positive values")
-
                 heap_priorities = result[1][i]
                 heap_indices = result[0][i]
                 seed_set = [(np.float32(np.inf), np.int32(-1)) for j in range(0)]
                 # heapq.heapify(seed_set)
-
-                print("  Initialising:")
-                print("  heap_priorities has shape", heap_priorities.shape)
-                print("  heap_indices has shape", heap_indices.shape)
-                print("  seed_set has length", len(seed_set))
 
                 ############ Init ################
                 index_bounds = tree_search_closure(current_query, internal_rng_state)
@@ -1311,30 +1293,16 @@ class NNDescent:
                 n_initial_points = candidate_indices.shape[0]
                 n_random_samples = min(k, n_neighbors) - n_initial_points
 
-                print("  index_bounds[0] =", index_bounds[0])
-                print("  index_bounds[1] =", index_bounds[1])
-                print("  length of candidate_indices =", len(candidate_indices))
-                print("  n_initial_points =", n_initial_points)
-                print("  n_random_samples =", n_random_samples)
-
                 for j in range(n_initial_points):
-                    print("  Pushing initial point " + str(j) + " to heap")
                     candidate = candidate_indices[j]
-                    print("    Got candidate = " + str(candidate))
                     d = np.float32(dist(data[candidate], current_query))
-                    print("    Got d =", d)
                     # indices are guaranteed different
                     simple_heap_push(heap_priorities, heap_indices, d, candidate)
-                    print("    Finished simple_heap_push()")
                     heapq.heappush(seed_set, (d, candidate))
-                    print("    Finished heapq.heappush()")
                     mark_visited(visited_nodes, candidate)
-                    print("    Finished mark_visited()")
-
 
                 if n_random_samples > 0:
                     for j in range(n_random_samples):
-                        print("  Pushing random point " + str(j) + " to heap")
                         candidate = np.int32(
                             np.abs(tau_rand_int(internal_rng_state)) % data.shape[0]
                         )
@@ -1346,9 +1314,6 @@ class NNDescent:
                             heapq.heappush(seed_set, (d, candidate))
                             mark_visited(visited_nodes, candidate)
 
-                print("  Length of seed_set is now", len(seed_set))
-                print("  mark_visited has " + str(num_visited(visited_nodes)) + "/" + str(8 * len(visited_nodes)) + " positive values")
-
                 ############ Search ##############
                 distance_bound = distance_scale * heap_priorities[0]
 
@@ -1357,22 +1322,14 @@ class NNDescent:
 
                 while d_vertex < distance_bound:
 
-                    print("    Current distance_bound =", distance_bound)
-                    print("    Current d_vertex =", d_vertex)
-                    print("    Current vertex = " + str(vertex))
-
                     for j in range(indptr[vertex], indptr[vertex + 1]):
-                        print("    j = " + str(j))
 
                         candidate = indices[j]
-                        print("      candidate = " + str(candidate))
 
                         if has_been_visited(visited_nodes, candidate) == 0:
-                            print("      candidate is unvisited")
                             mark_visited(visited_nodes, candidate)
 
                             d = np.float32(dist(data[candidate], current_query))
-                            print("      d =", d)
 
                             if d < distance_bound:
                                 simple_heap_push(
@@ -1382,16 +1339,8 @@ class NNDescent:
                                 # Update bound
                                 distance_bound = distance_scale * heap_priorities[0]
 
-                                print("      Updated seed_set length is " + str(len(seed_set)))
-                                print("      Updated distance_bound is", distance_bound)
-
-                        print("    mark_visited has " + str(num_visited(visited_nodes)) + "/" + str(8 * len(visited_nodes)) + " positive values")
-
-
                     # find new smallest seed point
-                    print("    Current seed_set length is " + str(len(seed_set)))
                     if len(seed_set) == 0:
-                        print("    Breaking out")
                         break
                     else:
                         d_vertex, vertex = heapq.heappop(seed_set)
