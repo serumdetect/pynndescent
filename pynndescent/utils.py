@@ -404,10 +404,10 @@ def mark_visited(table, candidate):
     fastmath=True,
     locals={
         "size": numba.types.intp,
-        "i": numba.types.uint16,
-        "ic1": numba.types.uint16,
-        "ic2": numba.types.uint16,
-        "i_swap": numba.types.uint16,
+        "i": numba.types.uint32,
+        "ic1": numba.types.uint32,
+        "ic2": numba.types.uint32,
+        "i_swap": numba.types.uint32,
     },
     cache=True,
 )
@@ -435,6 +435,8 @@ def simple_heap_push(priorities, indices, p, n):
     while True:
         ic1 = 2 * i + 1
         ic2 = ic1 + 1
+        if ic1 < i or ic2 < ic1:
+            raise OverflowError
 
         with numba.objmode:
             print("simple_heap_push(): ic1 = " + str(ic1))
