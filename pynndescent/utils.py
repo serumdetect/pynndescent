@@ -404,10 +404,10 @@ def mark_visited(table, candidate):
     fastmath=True,
     locals={
         "size": numba.types.intp,
-        "i": numba.types.uint32,
-        "ic1": numba.types.uint32,
-        "ic2": numba.types.uint32,
-        "i_swap": numba.types.uint32,
+        "i": numba.types.uint64,
+        "ic1": numba.types.uint64,
+        "ic2": numba.types.uint64,
+        "i_swap": numba.types.uint64,
     },
     cache=True,
 )
