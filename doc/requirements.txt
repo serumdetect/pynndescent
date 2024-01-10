@@ -9,3 +9,6 @@ ipykernel
 nbsphinx
 matplotlib
 seaborn
+numpy
+pandas
+sphinx_rtd_theme

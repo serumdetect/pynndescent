@@ -560,7 +560,7 @@ def make_euclidean_tree(
     point_indices,
     rng_state,
     leaf_size=30,
-    max_depth=100,
+    max_depth=200,
 ):
     if indices.shape[0] > leaf_size and max_depth > 0:
         (
@@ -628,7 +628,7 @@ def make_angular_tree(
     point_indices,
     rng_state,
     leaf_size=30,
-    max_depth=100,
+    max_depth=200,
 ):
     if indices.shape[0] > leaf_size and max_depth > 0:
         (
@@ -694,7 +694,7 @@ def make_sparse_euclidean_tree(
     point_indices,
     rng_state,
     leaf_size=30,
-    max_depth=100,
+    max_depth=200,
 ):
     if indices.shape[0] > leaf_size and max_depth > 0:
         (
@@ -766,7 +766,7 @@ def make_sparse_angular_tree(
     point_indices,
     rng_state,
     leaf_size=30,
-    max_depth=100,
+    max_depth=200,
 ):
     if indices.shape[0] > leaf_size and max_depth > 0:
         (
@@ -822,7 +822,7 @@ def make_sparse_angular_tree(
 
 
 @numba.njit(nogil=True)
-def make_dense_tree(data, rng_state, leaf_size=30, angular=False):
+def make_dense_tree(data, rng_state, leaf_size=30, angular=False, max_depth=200):
     indices = np.arange(data.shape[0]).astype(np.int32)
 
     hyperplanes = numba.typed.List.empty_list(dense_hyperplane_type)
@@ -840,6 +840,7 @@ def make_dense_tree(data, rng_state, leaf_size=30, angular=False):
             point_indices,
             rng_state,
             leaf_size,
+            max_depth=max_depth,
         )
     else:
         make_euclidean_tree(
@@ -851,14 +852,28 @@ def make_dense_tree(data, rng_state, leaf_size=30, angular=False):
             point_indices,
             rng_state,
             leaf_size,
+            max_depth=max_depth,
         )
 
-    result = FlatTree(hyperplanes, offsets, children, point_indices, leaf_size)
+    max_leaf_size = leaf_size
+    for points in point_indices:
+        if len(points) > max_leaf_size:
+            max_leaf_size = numba.int32(len(points))
+
+    result = FlatTree(hyperplanes, offsets, children, point_indices, max_leaf_size)
     return result
 
 
 @numba.njit(nogil=True)
-def make_sparse_tree(inds, indptr, spdata, rng_state, leaf_size=30, angular=False):
+def make_sparse_tree(
+    inds,
+    indptr,
+    spdata,
+    rng_state,
+    leaf_size=30,
+    angular=False,
+    max_depth=200,
+):
     indices = np.arange(indptr.shape[0] - 1).astype(np.int32)
 
     hyperplanes = numba.typed.List.empty_list(sparse_hyperplane_type)
@@ -878,6 +893,7 @@ def make_sparse_tree(inds, indptr, spdata, rng_state, leaf_size=30, angular=Fals
             point_indices,
             rng_state,
             leaf_size,
+            max_depth=max_depth,
         )
     else:
         make_sparse_euclidean_tree(
@@ -891,9 +907,15 @@ def make_sparse_tree(inds, indptr, spdata, rng_state, leaf_size=30, angular=Fals
             point_indices,
             rng_state,
             leaf_size,
+            max_depth=max_depth,
         )
 
-    return FlatTree(hyperplanes, offsets, children, point_indices, leaf_size)
+    max_leaf_size = leaf_size
+    for points in point_indices:
+        if len(points) > max_leaf_size:
+            max_leaf_size = numba.int32(len(points))
+
+    return FlatTree(hyperplanes, offsets, children, point_indices, max_leaf_size)
 
 
 @numba.njit(
@@ -1012,6 +1034,7 @@ def make_forest(
     random_state,
     n_jobs=None,
     angular=False,
+    max_depth=200,
 ):
     """Build a random projection forest with ``n_trees``.
 
@@ -1049,12 +1072,19 @@ def make_forest(
                     rng_states[i],
                     leaf_size,
                     angular,
+                    max_depth=max_depth,
                 )
                 for i in range(n_trees)
             )
         else:
             result = joblib.Parallel(n_jobs=n_jobs, require="sharedmem")(
-                joblib.delayed(make_dense_tree)(data, rng_states[i], leaf_size, angular)
+                joblib.delayed(make_dense_tree)(
+                    data,
+                    rng_states[i],
+                    leaf_size,
+                    angular,
+                    max_depth=max_depth
+                )
                 for i in range(n_trees)
             )
     except (RuntimeError, RecursionError, SystemError):
@@ -1067,14 +1097,14 @@ def make_forest(
     return tuple(result)
 
 
-@numba.njit(nogil=True, cache=True)
-def get_leaves_from_tree(tree):
+@numba.njit(nogil=True)
+def get_leaves_from_tree(tree, max_leaf_size):
     n_leaves = 0
     for i in range(len(tree.children)):
         if tree.children[i][0] == -1 and tree.children[i][1] == -1:
             n_leaves += 1
 
-    result = np.full((n_leaves, tree.leaf_size), -1, dtype=np.int32)
+    result = np.full((n_leaves, max_leaf_size), -1, dtype=np.int32)
     leaf_index = 0
     for i in range(len(tree.indices)):
         if tree.children[i][0] == -1 or tree.children[i][1] == -1:
@@ -1086,8 +1116,9 @@ def get_leaves_from_tree(tree):
 
 
 def rptree_leaf_array_parallel(rp_forest):
+    max_leaf_size = np.max([rp_tree.leaf_size for rp_tree in rp_forest])
     result = joblib.Parallel(n_jobs=-1, require="sharedmem")(
-        joblib.delayed(get_leaves_from_tree)(rp_tree) for rp_tree in rp_forest
+        joblib.delayed(get_leaves_from_tree)(rp_tree, max_leaf_size) for rp_tree in rp_forest
     )
     return result
 
